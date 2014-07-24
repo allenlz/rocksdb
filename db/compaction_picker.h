@@ -181,6 +181,10 @@ class LevelCompactionPicker : public CompactionPicker {
   // If level is 0 and there is already a compaction on that level, this
   // function will return nullptr.
   Compaction* PickCompactionBySize(Version* version, int level, double score);
+
+  // Try to compact small files from level-0 to level-0
+  Compaction* PickCompactionByL0SmallFiles(Version* version, double score,
+                                           LogBuffer* log_buffer);
 };
 
 class FIFOCompactionPicker : public CompactionPicker {

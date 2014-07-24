@@ -1134,6 +1134,11 @@ void rocksdb_options_set_level0_stop_writes_trigger(
   opt->rep.level0_stop_writes_trigger = n;
 }
 
+void rocksdb_options_set_level0_compact_small_file_size(
+    rocksdb_options_t* opt, int n) {
+  opt->rep.level0_compact_small_file_size = n;
+}
+
 void rocksdb_options_set_max_mem_compaction_level(
     rocksdb_options_t* opt, int n) {
   opt->rep.max_mem_compaction_level = n;

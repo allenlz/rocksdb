@@ -51,6 +51,7 @@ ColumnFamilyOptions::ColumnFamilyOptions()
       level0_file_num_compaction_trigger(4),
       level0_slowdown_writes_trigger(20),
       level0_stop_writes_trigger(24),
+      level0_compact_small_file_size(0),
       max_mem_compaction_level(2),
       target_file_size_base(2 * 1048576),
       target_file_size_multiplier(1),
@@ -113,6 +114,7 @@ ColumnFamilyOptions::ColumnFamilyOptions(const Options& options)
           options.level0_file_num_compaction_trigger),
       level0_slowdown_writes_trigger(options.level0_slowdown_writes_trigger),
       level0_stop_writes_trigger(options.level0_stop_writes_trigger),
+      level0_compact_small_file_size(options.level0_compact_small_file_size),
       max_mem_compaction_level(options.max_mem_compaction_level),
       target_file_size_base(options.target_file_size_base),
       target_file_size_multiplier(options.target_file_size_multiplier),
@@ -367,6 +369,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
         level0_slowdown_writes_trigger);
     Log(log,"             Options.level0_stop_writes_trigger: %d",
         level0_stop_writes_trigger);
+    Log(log,"         Options.level0_compact_small_file_size: %d",
+        level0_compact_small_file_size);
     Log(log,"               Options.max_mem_compaction_level: %d",
         max_mem_compaction_level);
     Log(log,"                  Options.target_file_size_base: %d",

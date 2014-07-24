@@ -410,6 +410,7 @@ Compaction* LevelCompactionPicker::PickCompaction(Version* version,
                                                   LogBuffer* log_buffer) {
   Compaction* c = nullptr;
   int level = -1;
+  bool compact_l0_small_files = false;
 
   // Compute the compactions needed. It is better to do it here
   // and also in LogAndApply(), otherwise the values could be stale.
@@ -426,6 +427,16 @@ Compaction* LevelCompactionPicker::PickCompaction(Version* version,
            version->compaction_score_[i] <= version->compaction_score_[i - 1]);
     level = version->compaction_level_[i];
     if ((version->compaction_score_[i] >= 1)) {
+      if (level == 0) {
+        // Try to compact small files from level-0 to level-0
+        c = PickCompactionByL0SmallFiles(version, version->compaction_score_[i],
+                                         log_buffer);
+        if (c != nullptr) {
+          compact_l0_small_files = true;
+          break;
+        }
+      }
+
       c = PickCompactionBySize(version, level, version->compaction_score_[i]);
       if (ExpandWhileOverlapping(c) == false) {
         delete c;
@@ -442,7 +453,7 @@ Compaction* LevelCompactionPicker::PickCompaction(Version* version,
 
   // Two level 0 compaction won't run at the same time, so don't need to worry
   // about files on level 0 being compacted.
-  if (level == 0) {
+  if (level == 0 && !compact_l0_small_files) {
     assert(compactions_in_progress_[0].empty());
     InternalKey smallest, largest;
     GetRange(c->inputs_[0].files, &smallest, &largest);
@@ -472,10 +483,116 @@ Compaction* LevelCompactionPicker::PickCompaction(Version* version,
   c->MarkFilesBeingCompacted(true);
 
   // Is this compaction creating a file at the bottommost level
-  c->SetupBottomMostLevel(false);
+  // Small files are compacted to level-0 again, we can not zeroing out the
+  // sequence number, which is a optimization for the bottommost level.
+  if (!compact_l0_small_files) {
+    c->SetupBottomMostLevel(false);
+  }
 
   // remember this currently undergoing compaction
   compactions_in_progress_[level].insert(c);
+
+  return c;
+}
+
+Compaction* LevelCompactionPicker::PickCompactionByL0SmallFiles(
+    Version* version, double score, LogBuffer* log_buffer) {
+  // Compaction from level-0 to level-1 is triggered by file number. If
+  // there are many small files in level-0, the compaction may cause
+  // large write-amp. So We try to pick chronologically adjacent small files
+  // in level-0 and compact them into level-0.
+
+  int level = 0;
+
+  unsigned int small_file_size = options_->level0_compact_small_file_size;
+  if (small_file_size <= 0) {
+    // Small files compaction is disabled
+    return nullptr;
+  }
+
+  if (!compactions_in_progress_[level].empty()) {
+    // Maybe we can allow compact small files in parallel in future
+    return nullptr;
+  }
+
+  // The files are sorted from newest first to oldest last.
+  const auto& files = version->files_[level];
+
+  uint64_t level_total_size = 0;
+  uint64_t candidate_size = 0;
+  int skiped_file_count = 0;
+  std::vector<FileMetaData*> candidates;
+
+  Version::FileSummaryStorage tmp;
+  LogToBuffer(log_buffer, "[%s] Level compaction: candidate files(%zu): %s\n",
+              version->cfd_->GetName().c_str(), version->files_[level].size(),
+              version->LevelFileSummary(&tmp, 0));
+
+  // Pick up as many as we can, expected to generate a file larger than
+  // target_file_size_base. We must make sure the new file should not be picked
+  // up again next time, that it, it should only compacted only once.
+  //
+  // Scan from the oldest file, stop picking new files if
+  // 1) total size of candidates exceed target_file_size_base 
+  // 2) or meet a file whose size is larger than level0_compact_small_file_size
+  for (auto it = files.rbegin(); it != files.rend(); ++it) {
+    FileMetaData* f = *it;
+    level_total_size += f->compensated_file_size;
+
+    if (f->fd.GetFileSize() >= small_file_size) {
+      if (candidates.size() > 1) {
+        // Meet a large file
+        break;
+      }
+      candidates.clear();
+      candidate_size = 0;
+      continue;
+    }
+    if (candidates.empty()) {
+      skiped_file_count = it - files.rbegin();
+    }
+    candidates.push_back(f);
+    candidate_size += f->fd.GetFileSize();
+
+    if (candidate_size >= (unsigned int)options_->target_file_size_base) {
+      break;
+    }
+  }
+
+  if (candidates.size() < 2) {
+    return nullptr;
+  }
+
+  // No need to compact small files if a cross level compaction is better
+  if (level_total_size >= MaxBytesForLevel(level)) {
+    LogToBuffer(log_buffer, "[%s] Level compaction: L0 total size %" PRIu64
+                " exceeds limit %" PRIu64 ", although %zu small files. "
+                "no need to compact small files in level0",
+                version->cfd_->GetName().c_str(), level_total_size,
+                (uint64_t)MaxBytesForLevel(level), candidates.size());
+    return nullptr;
+  }
+  if (skiped_file_count >= options_->level0_file_num_compaction_trigger - 1) {
+    LogToBuffer(log_buffer, "[%s] Level compaction: skip %" PRIu64 " files to "
+                "find %zu small files. level0 is almost full. no need "
+                "to compact small files in level0",
+                version->cfd_->GetName().c_str(), skiped_file_count,
+                candidates.size());
+    return nullptr;
+  }
+
+  Compaction* c =
+      new Compaction(version, level, level, LLONG_MAX, LLONG_MAX, 0,
+                     GetCompressionType(*options_, level));
+  c->score_ = score;
+  LogToBuffer(log_buffer, "[%s] Level compaction: skip %" PRIu64 " files to "
+              "find %zu small files in level0 with total size %" PRIu64,
+              version->cfd_->GetName().c_str(), skiped_file_count,
+              candidates.size(), candidate_size);
+  for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+    FileMetaData* f = *it;
+    c->inputs_[0].files.push_back(f);
+  }
 
   return c;
 }

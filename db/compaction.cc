@@ -113,6 +113,10 @@ bool Compaction::KeyNotExistsBeyondOutputLevel(const Slice& user_key) {
   assert(cfd_->options()->compaction_style != kCompactionStyleFIFO);
   if (cfd_->options()->compaction_style == kCompactionStyleUniversal) {
     return bottommost_level_;
+  } else if (start_level_ == 0 && output_level_ == 0) {
+    // If it's small files compaction, we can not remove deletion entry
+    // since it may occures in other files in level-0
+    return false;
   }
   // Maybe use binary search to find right entry instead of linear search?
   const Comparator* user_cmp = cfd_->user_comparator();

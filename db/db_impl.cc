@@ -1585,7 +1585,8 @@ Status DBImpl::FlushMemTableToOutputFile(ColumnFamilyData* cfd,
       *madeProgress = 1;
     }
     Version::LevelSummaryStorage tmp;
-    LogToBuffer(log_buffer, "[%s] Level summary: %s\n", cfd->GetName().c_str(),
+    LogToBuffer(log_buffer, "[%s] Level summary: imm[%d] %s\n",
+                cfd->GetName().c_str(), cfd->imm()->size(),
                 cfd->current()->LevelSummary(&tmp));
 
     if (disable_delete_obsolete_files_ == 0) {

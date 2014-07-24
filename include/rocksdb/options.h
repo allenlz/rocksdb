@@ -313,6 +313,18 @@ struct ColumnFamilyOptions {
   // Maximum number of level-0 files.  We stop writes at this point.
   int level0_stop_writes_trigger;
 
+  // This options is designed to reduce write-amp. Compaction from level-0 to
+  // level-1 is triggered by file number. If there are many small files in
+  // level-0, the compaction may cause large write-amp. So We try to pick
+  // chronologically adjacent small files in level-0 whose size is below
+  // level0_compact_small_file_size, and compact them into level-0. This is
+  // similar to Universal Style Compaction, while it can make sure small files
+  // in level-0 are compacted only once.
+  // You may set it 0 to disable it.
+  //
+  // Default: 0
+  int level0_compact_small_file_size;
+
   // Maximum level to which a new compacted memtable is pushed if it
   // does not create overlap.  We try to push to level 2 to avoid the
   // relatively expensive level 0=>1 compactions and to avoid some
