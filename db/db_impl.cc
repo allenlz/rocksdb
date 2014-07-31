@@ -3713,6 +3713,29 @@ Status DBImpl::NewIterators(
   return Status::OK();
 }
 
+Status DB::NewIterators2(
+    const ReadOptions& options,
+    const std::vector<ColumnFamilyHandle*>& column_families,
+    std::vector<Iterator*>* iterators, Iterator **iterator) {
+  if (column_families.empty()) {
+    return Status::InvalidArgument("Empty column families");
+  }
+  Status s = NewIterators(options, column_families, iterators);
+  if (!s.ok()) {
+    return s;
+  }
+
+  assert(!column_families.empty());
+  auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_families[0]);
+  auto cfd = cfh->cfd();
+  // TODO checking whether those column_families have same kind of comparator
+
+  *iterator = NewMergingIterator(cfd->user_comparator(), &(*iterators)[0],
+                                 iterators->size());
+
+  return Status::OK();
+}
+
 bool DBImpl::IsSnapshotSupported() const {
   for (auto cfd : *versions_->GetColumnFamilySet()) {
     if (!cfd->mem()->IsSnapshotSupported()) {
