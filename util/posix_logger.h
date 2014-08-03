@@ -63,7 +63,7 @@ class PosixLogger : public Logger {
 
     // We try twice: the first time with a fixed-size stack allocated buffer,
     // and the second time with a much larger dynamically allocated buffer.
-    char buffer[500];
+    char buffer[1000];
     for (int iter = 0; iter < 2; iter++) {
       char* base;
       int bufsize;
@@ -71,7 +71,7 @@ class PosixLogger : public Logger {
         bufsize = sizeof(buffer);
         base = buffer;
       } else {
-        bufsize = 30000;
+        bufsize = 300000;
         base = new char[bufsize];
       }
       char* p = base;
