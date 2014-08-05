@@ -2197,7 +2197,14 @@ Status DBImpl::BackgroundCompaction(bool* madeProgress,
                      : manual_end->DebugString().c_str()));
   } else {
     // no need to refcount in iteration since it's always under a mutex
+    autovector<ColumnFamilyData*> candidates;
     for (auto cfd : *versions_->GetColumnFamilySet()) {
+      candidates.push_back(cfd);
+    }
+    // Start from a random offset every time to avoid 'starvation'
+    int offset = rand() % candidates.size();
+    for (size_t idx = 0; idx < candidates.size(); ++idx) {
+      ColumnFamilyData* cfd = candidates[(offset + idx) % candidates.size()];
       if (!cfd->options()->disable_auto_compactions) {
         c.reset(cfd->PickCompaction(log_buffer));
         if (c != nullptr) {
@@ -3179,7 +3186,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact,
   Version::LevelSummaryStorage tmp;
   LogToBuffer(
       log_buffer,
-      "[%s] compacted to: %s, %.1f MB/sec, level %d, files in(%d, %d) out(%d) "
+      "[%s] Compacted to: %s, %.1f MB/sec, level %d, files in(%d, %d) out(%d) "
       "MB in(%.1f, %.1f) out(%.1f), read-write-amplify(%.1f) "
       "write-amplify(%.1f) %s\n",
       cfd->GetName().c_str(), cfd->current()->LevelSummary(&tmp),
