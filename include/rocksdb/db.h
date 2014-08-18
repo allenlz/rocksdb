@@ -278,7 +278,7 @@ class DB {
   virtual Status NewIterators2(
       const ReadOptions& options,
       const std::vector<ColumnFamilyHandle*>& column_families,
-      std::vector<Iterator*>* iterators, Iterator **iterator);
+      Iterator **iterator);
 
   // Return a handle to the current DB state.  Iterators created with
   // this handle will all observe a stable snapshot of the current DB

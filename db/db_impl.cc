@@ -3715,12 +3715,12 @@ Status DBImpl::NewIterators(
 
 Status DB::NewIterators2(
     const ReadOptions& options,
-    const std::vector<ColumnFamilyHandle*>& column_families,
-    std::vector<Iterator*>* iterators, Iterator **iterator) {
+    const std::vector<ColumnFamilyHandle*>& column_families, Iterator **iterator) {
   if (column_families.empty()) {
     return Status::InvalidArgument("Empty column families");
   }
-  Status s = NewIterators(options, column_families, iterators);
+  std::vector<Iterator*> iterators;
+  Status s = NewIterators(options, column_families, &iterators);
   if (!s.ok()) {
     return s;
   }
@@ -3730,8 +3730,8 @@ Status DB::NewIterators2(
   auto cfd = cfh->cfd();
   // TODO checking whether those column_families have same kind of comparator
 
-  *iterator = NewMergingIterator(cfd->user_comparator(), &(*iterators)[0],
-                                 iterators->size());
+  *iterator = NewMergingIterator(cfd->user_comparator(), &iterators[0],
+                                 iterators.size());
 
   return Status::OK();
 }
