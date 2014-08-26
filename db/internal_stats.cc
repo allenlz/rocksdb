@@ -186,7 +186,7 @@ bool InternalStats::GetProperty(DBPropertyType property_type,
       return true;
     }
     case kSsTables:
-      *value = current->DebugString();
+      *value = current->DebugString(true);
       return true;
     default:
       return false;
