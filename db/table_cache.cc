@@ -17,6 +17,7 @@
 #include "table/table_reader.h"
 #include "util/coding.h"
 #include "util/stop_watch.h"
+#include "util/perf_context_imp.h"
 
 namespace rocksdb {
 
@@ -59,20 +60,25 @@ Status TableCache::FindTable(const EnvOptions& toptions,
                              const InternalKeyComparator& internal_comparator,
                              const FileDescriptor& fd, Cache::Handle** handle,
                              const bool no_io) {
+  PERF_TIMER_AUTO(misc[7]);
   Status s;
   uint64_t number = fd.GetNumber();
   Slice key = GetSliceForFileNumber(&number);
   *handle = cache_->Lookup(key);
+  PERF_TIMER_STOP(misc[7]);
   if (*handle == nullptr) {
     if (no_io) { // Dont do IO and return a not-found status
       return Status::Incomplete("Table not found in table_cache, no_io is set");
     }
+    PERF_TIMER_START(misc[8]);
     std::string fname =
         TableFileName(db_paths_, fd.GetNumber(), fd.GetPathId());
     unique_ptr<RandomAccessFile> file;
     unique_ptr<TableReader> table_reader;
     s = env_->NewRandomAccessFile(fname, &file, toptions);
     RecordTick(options_->statistics.get(), NO_FILE_OPENS);
+    PERF_TIMER_STOP(misc[8]);
+    PERF_TIMER_START(misc[9]);
     if (s.ok()) {
       if (options_->advise_random_on_open) {
         file->Hint(RandomAccessFile::RANDOM);
@@ -82,7 +88,9 @@ Status TableCache::FindTable(const EnvOptions& toptions,
           *options_, toptions, internal_comparator, std::move(file),
           fd.GetFileSize(), &table_reader);
     }
+    PERF_TIMER_STOP(misc[9]);
 
+    PERF_TIMER_START(misc[10]);
     if (!s.ok()) {
       assert(table_reader == nullptr);
       RecordTick(options_->statistics.get(), NO_FILE_ERRORS);
@@ -92,6 +100,7 @@ Status TableCache::FindTable(const EnvOptions& toptions,
       assert(file.get() == nullptr);
       *handle = cache_->Insert(key, table_reader.release(), 1, &DeleteEntry);
     }
+    PERF_TIMER_STOP(misc[10]);
   }
   return s;
 }
@@ -142,11 +151,15 @@ Status TableCache::Get(const ReadOptions& options,
   Status s;
   Cache::Handle* handle = nullptr;
   if (!t) {
+    PERF_TIMER_AUTO(misc[1]);
     s = FindTable(storage_options_, internal_comparator, fd, &handle,
                   options.read_tier == kBlockCacheTier);
+    PERF_TIMER_STOP(misc[1]);
+    PERF_TIMER_START(misc[2]);
     if (s.ok()) {
       t = GetTableReaderFromHandle(handle);
     }
+    PERF_TIMER_STOP(misc[2]);
   }
   if (s.ok()) {
     s = t->Get(options, k, arg, saver, mark_key_may_exist);

@@ -51,6 +51,8 @@ void PerfContext::Reset() {
   find_next_user_entry_time = 0;
   write_pre_and_post_process_time = 0;
   write_memtable_time = 0;
+ 
+  memset(misc, 0, sizeof(misc));
 #endif
 }
 
@@ -82,7 +84,31 @@ std::string PerfContext::ToString() const {
      << OUTPUT(seek_internal_seek_time)
      << OUTPUT(find_next_user_entry_time)
      << OUTPUT(write_pre_and_post_process_time)
-     << OUTPUT(write_memtable_time);
+     << OUTPUT(write_memtable_time)
+     << OUTPUT(misc[0])
+     << OUTPUT(misc[1])
+     << OUTPUT(misc[2])
+     << OUTPUT(misc[3])
+     << OUTPUT(misc[4])
+     << OUTPUT(misc[5])
+     << OUTPUT(misc[6])
+     << OUTPUT(misc[7])
+     << OUTPUT(misc[8])
+     << OUTPUT(misc[9])
+     << OUTPUT(misc[10])
+     << OUTPUT(misc[11])
+     << OUTPUT(misc[12])
+     << OUTPUT(misc[13])
+
+     << OUTPUT(misc[14])
+     << OUTPUT(misc[15])
+     << OUTPUT(misc[16])
+     << OUTPUT(misc[17])
+     << OUTPUT(misc[18])
+     << OUTPUT(misc[19])
+     << OUTPUT(misc[20])
+     ;
+
   return ss.str();
 #endif
 }

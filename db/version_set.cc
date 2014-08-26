@@ -37,6 +37,7 @@
 #include "util/coding.h"
 #include "util/logging.h"
 #include "util/stop_watch.h"
+#include "util/perf_context_imp.h"
 
 namespace rocksdb {
 
@@ -801,6 +802,7 @@ void Version::Get(const ReadOptions& options,
                   Status* status,
                   MergeContext* merge_context,
                   bool* value_found) {
+  PERF_TIMER_AUTO(misc[0]);
   Slice ikey = k.internal_key();
   Slice user_key = k.user_key();
 
@@ -818,6 +820,7 @@ void Version::Get(const ReadOptions& options,
 
   FilePicker fp(files_, user_key, ikey, &file_levels_, num_non_empty_levels_,
       &file_indexer_, user_comparator_, internal_comparator_);
+  PERF_TIMER_STOP(misc[0]);
   FdWithKeyRange* f = fp.GetNextFile();
   while (f != nullptr) {
     *status = table_cache_->Get(options, *internal_comparator_, f->fd, ikey,

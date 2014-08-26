@@ -242,9 +242,35 @@ class PosixRandomAccessFile: public RandomAccessFile {
                       char* scratch) const {
     Status s;
     ssize_t r = -1;
+    uint64_t ts = Env::Default()->NowNanos();
     do {
       r = pread(fd_, scratch, n, static_cast<off_t>(offset));
     } while (r < 0 && errno == EINTR);
+    uint64_t te = Env::Default()->NowNanos();
+    uint64_t timestamp = Env::Default()->NowMicros();
+    if (te - ts > 10 * 1000 * 1000) {
+      uint64_t tid = pthread_self();
+
+      struct timeval now_tv;
+      gettimeofday(&now_tv, nullptr);
+      const time_t seconds = now_tv.tv_sec;
+      struct tm t;
+      localtime_r(&seconds, &t);
+
+      fprintf(stdout,
+                    "%04d/%02d/%02d-%02d:%02d:%02d.%06d %llx "
+                    "pread slow. fd: %d, n: %lu, ts: %lu, te: %lu, cost: %lu. timestamp: %lu\n",
+                    t.tm_year + 1900,
+                    t.tm_mon + 1,
+                    t.tm_mday,
+                    t.tm_hour,
+                    t.tm_min,
+                    t.tm_sec,
+                    static_cast<int>(now_tv.tv_usec),
+                    static_cast<long long unsigned int>(tid),
+                    fd_, n,
+                    ts, te, te - ts, timestamp);
+    }
     IOSTATS_ADD_IF_POSITIVE(bytes_read, r);
     *result = Slice(scratch, (r < 0) ? 0 : r);
     if (r < 0) {

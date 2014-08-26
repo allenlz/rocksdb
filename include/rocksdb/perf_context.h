@@ -26,6 +26,8 @@ PerfLevel GetPerfLevel();
 // A thread local context for gathering performance counter efficiently
 // and transparently.
 
+#define MISC_TIMER_NUM 32
+
 struct PerfContext {
 
   void Reset(); // reset all performance counters to zero
@@ -65,6 +67,8 @@ struct PerfContext {
   uint64_t write_wal_time;            // total time spent on writing to WAL
   // total time spent on writing to mem tables
   uint64_t write_memtable_time;
+
+  uint64_t misc[MISC_TIMER_NUM];
 };
 
 #if defined(NPERF_CONTEXT) || defined(IOS_CROSS_COMPILE)

@@ -830,6 +830,7 @@ Iterator* BlockBasedTable::NewIndexIterator(const ReadOptions& read_options) {
 // into an iterator over the contents of the corresponding block.
 Iterator* BlockBasedTable::NewDataBlockIterator(Rep* rep,
     const ReadOptions& ro, const Slice& index_value) {
+  PERF_TIMER_AUTO(misc[14]);
   const bool no_io = (ro.read_tier == kBlockCacheTier);
   Cache* block_cache = rep->options.block_cache.get();
   Cache* block_cache_compressed = rep->options.
@@ -845,9 +846,11 @@ Iterator* BlockBasedTable::NewDataBlockIterator(Rep* rep,
   if (!s.ok()) {
     return NewErrorIterator(s);
   }
+  PERF_TIMER_STOP(misc[14]);
 
   // If either block cache is enabled, we'll try to read from it.
   if (block_cache != nullptr || block_cache_compressed != nullptr) {
+    PERF_TIMER_START(misc[15]);
     Statistics* statistics = rep->options.statistics.get();
     char cache_key[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
     char compressed_cache_key[kMaxCacheKeyPrefixSize + kMaxVarint64Length];
@@ -865,23 +868,30 @@ Iterator* BlockBasedTable::NewDataBlockIterator(Rep* rep,
                          rep->compressed_cache_key_prefix_size, handle,
                          compressed_cache_key);
     }
+    PERF_TIMER_STOP(misc[15]);
 
+    PERF_TIMER_START(misc[16]);
     s = GetDataBlockFromCache(key, ckey, block_cache, block_cache_compressed,
                               statistics, ro, &block);
+    PERF_TIMER_STOP(misc[16]);
 
     if (block.value == nullptr && !no_io && ro.fill_cache) {
       Block* raw_block = nullptr;
       {
         StopWatch sw(rep->options.env, statistics, READ_BLOCK_GET_MICROS);
+        PERF_TIMER_START(misc[17]);
         s = ReadBlockFromFile(rep->file.get(), rep->footer, ro, handle,
                               &raw_block, rep->options.env,
                               block_cache_compressed == nullptr);
+        PERF_TIMER_STOP(misc[17]);
       }
 
+      PERF_TIMER_START(misc[18]);
       if (s.ok()) {
         s = PutDataBlockToCache(key, ckey, block_cache, block_cache_compressed,
                                 ro, statistics, &block, raw_block);
       }
+      PERF_TIMER_STOP(misc[18]);
     }
   }
 
@@ -891,10 +901,13 @@ Iterator* BlockBasedTable::NewDataBlockIterator(Rep* rep,
       // Could not read from block_cache and can't do IO
       return NewErrorIterator(Status::Incomplete("no blocking io"));
     }
+    PERF_TIMER_START(misc[19]);
     s = ReadBlockFromFile(rep->file.get(), rep->footer, ro, handle,
                           &block.value, rep->options.env);
+    PERF_TIMER_STOP(misc[19]);
   }
 
+  PERF_TIMER_START(misc[20]);
   Iterator* iter;
   if (block.value != nullptr) {
     iter = block.value->NewIterator(&rep->internal_comparator);
@@ -907,6 +920,7 @@ Iterator* BlockBasedTable::NewDataBlockIterator(Rep* rep,
   } else {
     iter = NewErrorIterator(s);
   }
+  PERF_TIMER_STOP(misc[20]);
   return iter;
 }
 
@@ -1022,11 +1036,14 @@ Status BlockBasedTable::Get(
     bool (*result_handler)(void* handle_context, const ParsedInternalKey& k,
                            const Slice& v),
     void (*mark_key_may_exist_handler)(void* handle_context)) {
+  PERF_TIMER_AUTO(misc[3]);
   Status s;
   Iterator* iiter = NewIndexIterator(read_options);
   auto filter_entry = GetFilter(read_options.read_tier == kBlockCacheTier);
   FilterBlockReader* filter = filter_entry.value;
+  PERF_TIMER_STOP(misc[3]);
   bool done = false;
+  PERF_TIMER_START(misc[4]);
   for (iiter->Seek(key); iiter->Valid() && !done; iiter->Next()) {
     Slice handle_value = iiter->value();
 
@@ -1036,6 +1053,8 @@ Status BlockBasedTable::Get(
       handle.DecodeFrom(&handle_value).ok() &&
       !filter->KeyMayMatch(handle.offset(), key);
 
+    PERF_TIMER_STOP(misc[4]);
+
     if (may_not_exist_in_filter) {
       // Not found
       // TODO: think about interaction with Merge. If a user key cannot
@@ -1043,8 +1062,10 @@ Status BlockBasedTable::Get(
       RecordTick(rep_->options.statistics.get(), BLOOM_FILTER_USEFUL);
       break;
     } else {
+      PERF_TIMER_START(misc[5]);
       unique_ptr<Iterator> block_iter(
           NewDataBlockIterator(rep_, read_options, iiter->value()));
+      PERF_TIMER_STOP(misc[5]);
 
       if (read_options.read_tier && block_iter->status().IsIncomplete()) {
         // couldn't get block from block_cache
@@ -1054,8 +1075,12 @@ Status BlockBasedTable::Get(
         break;
       }
 
+      PERF_TIMER_START(misc[12]);
       // Call the *saver function on each entry/block until it returns false
       for (block_iter->Seek(key); block_iter->Valid(); block_iter->Next()) {
+        PERF_TIMER_STOP(misc[12]);
+        PERF_TIMER_START(misc[13]);
+        PERF_COUNTER_ADD(misc[11], 1);
         ParsedInternalKey parsed_key;
         if (!ParseInternalKey(block_iter->key(), &parsed_key)) {
           s = Status::Corruption(Slice());
@@ -1066,16 +1091,21 @@ Status BlockBasedTable::Get(
           done = true;
           break;
         }
+        PERF_TIMER_STOP(misc[13]);
+        PERF_TIMER_START(misc[12]);
       }
       s = block_iter->status();
     }
+    PERF_TIMER_START(misc[4]);
   }
 
+  PERF_TIMER_START(misc[6]);
   filter_entry.Release(rep_->options.block_cache.get());
   if (s.ok()) {
     s = iiter->status();
   }
   delete iiter;
+  PERF_TIMER_STOP(misc[6]);
   return s;
 }
 
