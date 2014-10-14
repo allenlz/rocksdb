@@ -4299,8 +4299,9 @@ Status DBImpl::MakeRoomForWrite(
           if (s.ok()) {
             // Our final size should be less than write_buffer_size
             // (compression, etc) but err on the side of caution.
-            lfile->SetPreallocationBlockSize(1.1 *
-                                             cfd->options()->write_buffer_size);
+            // TODO: temporarily disable preallocation to save write_wal_time
+            //lfile->SetPreallocationBlockSize(1.1 *
+                                             //cfd->options()->write_buffer_size);
             new_log = new log::Writer(std::move(lfile));
           }
         }
@@ -4732,7 +4733,8 @@ Status DB::Open(const DBOptions& db_options, const std::string& dbname,
         LogFileName(impl->options_.wal_dir, new_log_number), &lfile,
         impl->options_.env->OptimizeForLogWrite(soptions));
     if (s.ok()) {
-      lfile->SetPreallocationBlockSize(1.1 * max_write_buffer_size);
+      // TODO: temporarily disable preallocation to save write_wal_time
+      //lfile->SetPreallocationBlockSize(1.1 * max_write_buffer_size);
       impl->logfile_number_ = new_log_number;
       impl->log_.reset(new log::Writer(std::move(lfile)));
 
