@@ -78,6 +78,9 @@ struct EnvOptions {
 
   // If not nullptr, write rate limiting is enabled for flush and compaction
   RateLimiter* rate_limiter = nullptr;
+
+  // If not nullptr, read rate limiting is enabled for compaction
+  RateLimiter* read_rate_limiter = nullptr;
 };
 
 class Env {
@@ -330,7 +333,9 @@ class SequentialFile {
 // A file abstraction for randomly reading the contents of a file.
 class RandomAccessFile {
  public:
-  RandomAccessFile() { }
+  RandomAccessFile()
+    : io_priority_(Env::IO_TOTAL) {
+  }
   virtual ~RandomAccessFile();
 
   // Read up to "n" bytes from the file starting at "offset".
@@ -365,6 +370,13 @@ class RandomAccessFile {
               // compatibility.
   };
 
+  /*
+   * Change the priority in rate limiter if rate limiting is enabled.
+   * If rate limiting is not enabled, this call has no effect.
+   */
+  virtual void SetIOPriority(Env::IOPriority pri) {
+    io_priority_ = pri;
+  }
 
   enum AccessPattern { NORMAL, RANDOM, SEQUENTIAL, WILLNEED, DONTNEED };
 
@@ -376,6 +388,9 @@ class RandomAccessFile {
   virtual Status InvalidateCache(size_t offset, size_t length) {
     return Status::NotSupported("InvalidateCache not supported.");
   }
+
+ protected:
+  Env::IOPriority io_priority_;
 };
 
 // A file abstraction for sequential writing.  The implementation

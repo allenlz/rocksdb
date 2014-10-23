@@ -534,6 +534,7 @@ void BlockBasedTable::SetupForCompaction() {
     default:
       assert(false);
   }
+  rep_->file->SetIOPriority(Env::IO_LOW);
   compaction_optimized_ = true;
 }
 

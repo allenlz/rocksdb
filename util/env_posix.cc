@@ -229,11 +229,13 @@ class PosixRandomAccessFile: public RandomAccessFile {
   std::string filename_;
   int fd_;
   bool use_os_buffer_;
+  RateLimiter* rate_limiter_;
 
  public:
   PosixRandomAccessFile(const std::string& fname, int fd,
                         const EnvOptions& options)
-      : filename_(fname), fd_(fd), use_os_buffer_(options.use_os_buffer) {
+      : filename_(fname), fd_(fd), use_os_buffer_(options.use_os_buffer),
+        rate_limiter_(options.read_rate_limiter) {
     assert(!options.use_mmap_reads);
   }
   virtual ~PosixRandomAccessFile() { close(fd_); }
@@ -243,6 +245,7 @@ class PosixRandomAccessFile: public RandomAccessFile {
     Status s;
     ssize_t r = -1;
     do {
+      RequestSafeToken(n);
       r = pread(fd_, scratch, n, static_cast<off_t>(offset));
     } while (r < 0 && errno == EINTR);
     IOSTATS_ADD_IF_POSITIVE(bytes_read, r);
@@ -299,6 +302,30 @@ class PosixRandomAccessFile: public RandomAccessFile {
     }
     return IOError(filename_, errno);
 #endif
+  }
+
+ private:
+  inline size_t RequestToken(size_t bytes) const {
+    if (rate_limiter_ && io_priority_ < Env::IO_TOTAL) {
+      bytes = std::min(bytes,
+          static_cast<size_t>(rate_limiter_->GetSingleBurstBytes()));
+      rate_limiter_->Request(bytes, io_priority_);
+    }
+    return bytes;
+  }
+
+  inline void RequestSafeToken(size_t bytes) const {
+    // Use RequestToken in read directly may cause the bytes read is less than
+    // expected, then cause 'truncated block read' error.
+    // This is a safe version to request token. The bad point is that, if bytes
+    // is large, the read may be a burst after wait all small requests are
+    // satisfied, while, the good news is we can avoid small reads.
+    // Besides, this is easist way. 
+    // TODO(lizhe), a more complicated but 'right' way?
+    size_t left = bytes;
+    while (left > 0) {
+      left -= RequestToken(left);
+    }
   }
 };
 
