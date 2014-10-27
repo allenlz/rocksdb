@@ -17,6 +17,12 @@ class RateLimiter {
  public:
   virtual ~RateLimiter() {}
 
+  // Get the rate bytes percent second
+  virtual int64_t GetRateBytes() const = 0;
+
+  // Set the rate bytes percent second
+  virtual void SetRateBytes(int64_t rate_bytes_per_sec) = 0;
+
   // Request for token to write bytes. If this request can not be satisfied,
   // the call is blocked. Caller is responsible to make sure
   // bytes < GetSingleBurstBytes()

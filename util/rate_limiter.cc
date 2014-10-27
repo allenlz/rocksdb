@@ -28,6 +28,7 @@ GenericRateLimiter::GenericRateLimiter(
     int64_t refill_period_us,
     int32_t fairness)
   : refill_period_us_(refill_period_us),
+    rate_bytes_per_sec_(rate_bytes_per_sec),
     refill_bytes_per_period_(rate_bytes_per_sec * refill_period_us / 1000000.0),
     env_(Env::Default()),
     stop_(false),
