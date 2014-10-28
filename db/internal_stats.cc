@@ -94,6 +94,8 @@ DBPropertyType GetPropertyType(const Slice& property) {
 
   if (in.starts_with("num-files-at-level")) {
     return kNumFilesAtLevel;
+  } else if (in.starts_with("num-bytes-at-level")) {
+    return kNumBytesAtLevel;
   } else if (in == "levelstats") {
     return kLevelStats;
   } else if (in == "stats") {
@@ -149,6 +151,20 @@ bool InternalStats::GetProperty(DBPropertyType property_type,
         char buf[100];
         snprintf(buf, sizeof(buf), "%d",
                  current->NumLevelFiles(static_cast<int>(level)));
+        *value = buf;
+        return true;
+      }
+    }
+    case kNumBytesAtLevel: {
+      in.remove_prefix(strlen("rocksdb.num-bytes-at-level"));
+      uint64_t level;
+      bool ok = ConsumeDecimalNumber(&in, &level) && in.empty();
+      if (!ok || (int)level >= number_levels_) {
+        return false;
+      } else {
+        char buf[100];
+        snprintf(buf, sizeof(buf), "%" PRId64,
+                 current->NumLevelBytes(static_cast<int>(level)));
         *value = buf;
         return true;
       }

@@ -24,6 +24,7 @@ class DBImpl;
 enum DBPropertyType : uint32_t {
   kUnknown,
   kNumFilesAtLevel,  // Number of files at a specific level
+  kNumBytesAtLevel,  // Number of bytes at a specific level
   kLevelStats,       // Return number of files and total sizes of each level
   kCFStats,          // Return general statitistics of CF
   kDBStats,          // Return general statitistics of DB
