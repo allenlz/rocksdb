@@ -68,6 +68,7 @@
 #include "util/iostats_context_imp.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
+#include "util/rate_limiter.h"
 
 namespace rocksdb {
 
@@ -2844,6 +2845,15 @@ Status DBImpl::ProcessKeyValueCompaction(
     // MergeUntil has moved input to the next entry
     if (!current_entry_is_merging) {
       input->Next();
+    }
+
+    // A easy way to control compaction rate, not fully implemnted.
+    // Bad point: 1) it's esimated after we already read the data. 2) if size
+    // exceed the bytes too much, we only wait once.
+    // TODO(lizhe) Maybe more compacted but 'right' way.
+    if (options_.compaction_rate_limiter && input->Valid()) {
+      options_.compaction_rate_limiter->Request(
+          input->key().size() + input->value().size(), Env::IO_LOW);
     }
   }
 
