@@ -2852,8 +2852,10 @@ Status DBImpl::ProcessKeyValueCompaction(
     // exceed the bytes too much, we only wait once.
     // TODO(lizhe) Maybe more compacted but 'right' way.
     if (options_.compaction_rate_limiter && input->Valid()) {
-      options_.compaction_rate_limiter->Request(
-          input->key().size() + input->value().size(), Env::IO_LOW);
+      int64_t bytes = std::min(
+          int64_t(input->key().size() + input->value().size()),
+          options_.compaction_rate_limiter->GetSingleBurstBytes());
+      options_.compaction_rate_limiter->Request(bytes, Env::IO_LOW);
     }
   }
 

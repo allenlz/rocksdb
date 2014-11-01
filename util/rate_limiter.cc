@@ -61,7 +61,9 @@ GenericRateLimiter::~GenericRateLimiter() {
 }
 
 void GenericRateLimiter::Request(int64_t bytes, const Env::IOPriority pri) {
-  assert(bytes <= refill_bytes_per_period_);
+  // Since we can adjust rate limit dynamicly, so the bytes may be larger than
+  // refill_bytes_per_period_
+  //assert(bytes <= refill_bytes_per_period_);
 
   MutexLock g(&request_mutex_);
   if (stop_) {
@@ -179,10 +181,23 @@ void GenericRateLimiter::Refill() {
     auto* queue = &queue_[use_pri];
     while (!queue->empty()) {
       auto* next_req = queue->front();
-      if (available_bytes_ < next_req->bytes) {
-        break;
+
+      // Request's bytes may be larger than refill_bytes_per_period_ in the
+      // following case:
+      // 1. requst is append to the waiting queue
+      // 2. we set rate limit as a smaller value
+      // 3. reqest wait up but not satisfied, then is append to the waiting
+      // queue again.
+      // To avoid it, we satisfy this request immediately
+      if (refill_bytes_per_period_ < next_req->bytes) {
+        available_bytes_ = 0;
+      } else {
+        if (available_bytes_ < next_req->bytes) {
+          break;
+        }
+        available_bytes_ -= next_req->bytes;
       }
-      available_bytes_ -= next_req->bytes;
+
       total_bytes_through_[use_pri] += next_req->bytes;
       queue->pop_front();
 

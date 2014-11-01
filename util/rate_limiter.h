@@ -34,9 +34,7 @@ class GenericRateLimiter : public RateLimiter {
     MutexLock g(&request_mutex_);
     rate_bytes_per_sec_ = rate_bytes_per_sec;
     refill_bytes_per_period_ = rate_bytes_per_sec * refill_period_us_ / 1000000.0;
-    if (available_bytes_ > refill_bytes_per_period_) {
-      available_bytes_ = refill_bytes_per_period_;
-    }
+    available_bytes_ = refill_bytes_per_period_;
   }
 
   // Request for token to write bytes. If this request can not be satisfied,
